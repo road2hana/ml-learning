@@ -17,6 +17,11 @@ def estep(X: np.ndarray, mixture: GaussianMixture) -> Tuple[np.ndarray, float]:
             for all components for all examples
         float: log-likelihood of the assignment
     """
+    # probability of p(x|theta)
+    n , d, K = X.shape[0], X.shape[1], mixture.mu.shape[0]
+    XX = X.reshape(n, 1, d)
+    mu = mixture.mu.reshape(1, K, d)
+    prior = np.exp(-np.square(XX - mixture.mu)/(2 * mixture.var))
     raise NotImplementedError
 
 
