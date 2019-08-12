@@ -65,7 +65,6 @@ def run(X: np.ndarray, mixture: GaussianMixture,
         post: np.ndarray) -> Tuple[GaussianMixture, np.ndarray, float]:
     """Runs the mixture model
 
-
     Args:
         X: (n, d) array holding the data
         post: (n, K) array holding the soft counts
