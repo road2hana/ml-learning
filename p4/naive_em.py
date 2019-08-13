@@ -17,12 +17,19 @@ def estep(X: np.ndarray, mixture: GaussianMixture) -> Tuple[np.ndarray, float]:
             for all components for all examples
         float: log-likelihood of the assignment
     """
-    # probability of p(x|theta)
     n , d, K = X.shape[0], X.shape[1], mixture.mu.shape[0]
-    XX = X.reshape(n, 1, d)
+    xx = X.reshape(n, 1, d)
     mu = mixture.mu.reshape(1, K, d)
-    prior = np.exp(-np.square(XX - mixture.mu)/(2 * mixture.var))
-    raise NotImplementedError
+    xx_mu_2 = np.sum(-np.square(xx - mu), axis=2) # n x K
+    prior = np.exp(xx_mu_2/(2 * mixture.var)) # n x K
+    prior = prior/np.power(2 * np.pi * mixture.var, d/2) # n x K
+    prior = prior * mixture.p
+    prob_sumKmodels = np.sum(prior, axis=1).reshape(n,1) # n x 1
+    log_likelihood = np.log(prob_sumKmodels) # n x 1
+    log_likelihood = np.sum(log_likelihood, dtype=np.float) # scalar
+    post = prior/prob_sumKmodels
+    log_post = np.log(post, dtype=np.float)
+    return post, log_likelihood
 
 
 def mstep(X: np.ndarray, post: np.ndarray) -> GaussianMixture:
@@ -76,4 +83,11 @@ def run(X: np.ndarray, mixture: GaussianMixture,
             for all components for all examples
         float: log-likelihood of the current assignment
     """
-    raise NotImplementedError
+    pre_cost = None
+    cost = None
+    while pre_cost is None or cost - pre_cost > 1e-6 * np.abs(cost):
+        pre_cost = cost
+        post, cost = estep(X, mixture)
+        mixture = mstep(X, post)
+
+    return mixture, post, cost
