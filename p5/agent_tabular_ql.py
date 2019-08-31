@@ -14,7 +14,7 @@ NUM_RUNS = 10
 NUM_EPOCHS = 200
 NUM_EPIS_TRAIN = 25  # number of episodes for training at each epoch
 NUM_EPIS_TEST = 50  # number of episodes for testing
-ALPHA = 0.1  # learning rate for training
+ALPHA = 1e-6  # learning rate for training
 
 ACTIONS = framework.get_actions()
 OBJECTS = framework.get_objects()
@@ -36,6 +36,16 @@ def epsilon_greedy(state_1, state_2, q_func, epsilon):
     """
     # TODO Your code here
     action_index, object_index = None, None
+    actions = q_func[state_1, state_2, :, :]
+    pi_index = np.argmax(actions)
+    num_command = NUM_ACTIONS * NUM_OBJECTS
+    samples = np.arange(num_command)
+    sample_weights = np.ones(num_command)*epsilon/(num_command-1)
+    sample_weights[pi_index] = 1 - epsilon
+    if epsilon == 1:
+        sample_weights[:] = 1/num_command
+    pi_index = np.random.choice(samples, p=sample_weights)
+    (action_index, object_index) = np.unravel_index(pi_index, dims=(NUM_ACTIONS, NUM_OBJECTS))
     return (action_index, object_index)
 
 
@@ -61,8 +71,13 @@ def tabular_q_learning(q_func, current_state_1, current_state_2, action_index,
         None
     """
     # TODO Your code here
-    q_func[current_state_1, current_state_2, action_index,
-           object_index] = 0  # TODO Your update here
+    max_q_c_target_state = np.max(q_func[next_state_1, next_state_2, :, :])
+    last_q = q_func[current_state_1, current_state_2, action_index, object_index]
+    if terminal:
+        max_q_c_target_state = 0
+
+    q_func[current_state_1, current_state_2, action_index, object_index] = (1 - ALPHA) * last_q + \
+        ALPHA * (reward + GAMMA * max_q_c_target_state)
 
     return None  # This function shouldn't return anything
 
@@ -86,26 +101,34 @@ def run_episode(for_training):
 
     epi_reward = None
     # initialize for each episode
-    # TODO Your code here
-
+    epi_reward = 0
+    t = 0
     (current_room_desc, current_quest_desc, terminal) = framework.newGame()
 
     while not terminal:
         # Choose next action and execute
-        # TODO Your code here
-
+        current_state_1, current_state_2 = dict_room_desc[current_room_desc], dict_quest_desc[current_quest_desc]
+        # get the next action according to policy
+        action_index, object_index = epsilon_greedy(current_state_1, current_state_2, q_func, epsilon)
+        # take action and get the next state
+        next_room_desc, next_quest_desc, reward, terminal = framework.step_game(current_room_desc, current_quest_desc,
+                                                                                action_index, object_index)
+        next_state_1, next_state_2 = dict_room_desc[next_room_desc], dict_quest_desc[next_quest_desc]
         if for_training:
             # update Q-function.
-            # TODO Your code here
+            tabular_q_learning(q_func, current_state_1, current_state_2, action_index, object_index, reward,
+                               next_state_1, next_state_2, terminal)
             pass
 
         if not for_training:
             # update reward
-            # TODO Your code here
+            epi_reward = epi_reward + GAMMA ** t * reward
+            t = t + 1
             pass
 
         # prepare next step
-        # TODO Your code here
+        #current_state_1, current_state_2 = next_state_1, next_state_2
+        current_room_desc, current_quest_desc = next_room_desc, next_quest_desc
 
     if not for_training:
         return epi_reward
@@ -158,7 +181,8 @@ if __name__ == '__main__':
         epoch_rewards_test.append(run())
 
     epoch_rewards_test = np.array(epoch_rewards_test)
-
+    # avg_rewards = np.average(epoch_rewards_test[18:])
+    # print('avg_rewards: %.4f' % (avg_rewards))
     x = np.arange(NUM_EPOCHS)
     fig, axis = plt.subplots()
     axis.plot(x, np.mean(epoch_rewards_test,

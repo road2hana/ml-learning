@@ -11,11 +11,11 @@ DEBUG = False
 GAMMA = 0.5  # discounted factor
 TRAINING_EP = 0.5  # epsilon-greedy parameter for training
 TESTING_EP = 0.05  # epsilon-greedy parameter for testing
-NUM_RUNS = 10
+NUM_RUNS = 5
 NUM_EPOCHS = 600
 NUM_EPIS_TRAIN = 25  # number of episodes for training at each epoch
 NUM_EPIS_TEST = 50  # number of episodes for testing
-ALPHA = 0.001  # learning rate for training
+ALPHA = 0.001 # learning rate for training
 
 ACTIONS = framework.get_actions()
 OBJECTS = framework.get_objects()
@@ -47,6 +47,19 @@ def epsilon_greedy(state_vector, theta, epsilon):
     """
     # TODO Your code here
     action_index, object_index = None, None
+    if epsilon == 0:
+        action_index, object_index = index2tuple(np.argmax(theta @ state_vector))
+    elif (epsilon > 0) and (epsilon < 1):
+        r_action_index, r_object_index = np.random.choice(range(NUM_ACTIONS)), np.random.choice(range(NUM_OBJECTS))
+        r_index = tuple2index(r_action_index, r_object_index)
+        l_index = np.argmax(theta @ state_vector)
+        actions = np.array([l_index, r_index])
+        select_probability = np.array([1-epsilon, epsilon])
+        selected_action_index = np.random.choice(actions, p=select_probability)
+        action_index, object_index = index2tuple(selected_action_index)
+    elif epsilon == 1:
+        action_index, object_index = np.random.choice(range(NUM_ACTIONS)), np.random.choice(range(NUM_OBJECTS))
+
     return (action_index, object_index)
 # pragma: coderesponse end
 
@@ -69,7 +82,17 @@ def linear_q_learning(theta, current_state_vector, action_index, object_index,
         None
     """
     # TODO Your code here
-    theta = None # TODO Your update here
+    max_Q_next = None
+    if terminal:
+        max_Q_next = 0
+    else:
+        q_value = theta @ next_state_vector
+        max_Q_next = np.max(theta @ next_state_vector)
+
+    q_value = (theta @ current_state_vector)[tuple2index(action_index, object_index)]
+    g_theta = (reward + (GAMMA * max_Q_next - q_value)) * current_state_vector
+    action_object_index = tuple2index(action_index, object_index)
+    theta[action_object_index] = theta[action_object_index] + ALPHA * g_theta
 # pragma: coderesponse end
 
 
@@ -85,31 +108,39 @@ def run_episode(for_training):
         None
     """
     epsilon = TRAINING_EP if for_training else TESTING_EP
-    epi_reward = None
-
     # initialize for each episode
     # TODO Your code here
-
+    epi_reward = 0
     (current_room_desc, current_quest_desc, terminal) = framework.newGame()
+    step_count = 0
     while not terminal:
         # Choose next action and execute
         current_state = current_room_desc + current_quest_desc
         current_state_vector = utils.extract_bow_feature_vector(
             current_state, dictionary)
         # TODO Your code here
-
+        # get next action
+        action_index, object_index = epsilon_greedy(current_state_vector, theta, epsilon)
+        next_room_desc, next_quest_desc, reward, terminal = framework.step_game(current_room_desc,
+                                                                                current_quest_desc,
+                                                                                action_index, object_index)
+        next_state = next_room_desc + next_quest_desc
+        next_state_vector = utils.extract_bow_feature_vector(next_state, dictionary)
         if for_training:
             # update Q-function.
             # TODO Your code here
-            pass
+            linear_q_learning(theta, current_state_vector, action_index, object_index, reward, next_state_vector,
+                              terminal)
 
         if not for_training:
             # update reward
             # TODO Your code here
-            pass
+            epi_reward = epi_reward + GAMMA ** step_count * reward
+            step_count = step_count + 1
 
         # prepare next step
         # TODO Your code here
+        current_room_desc, current_quest_desc = next_room_desc, next_quest_desc
 
     if not for_training:
         return epi_reward
@@ -169,3 +200,4 @@ if __name__ == '__main__':
     axis.set_title(('Linear: nRuns=%d, Epilon=%.2f, Epi=%d, alpha=%.4f' %
                     (NUM_RUNS, TRAINING_EP, NUM_EPIS_TRAIN, ALPHA)))
 
+    plt.show()
